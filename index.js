@@ -157,4 +157,44 @@ client.on('interactionCreate', async interaction => {
     }
 
     if (interaction.isModalSubmit() && interaction.customId === 'gw_modal') {
-        const prize = interaction.fields.getTextInputValue('gw_
+        const prize = interaction.fields.getTextInputValue('gw_prize');
+        const desc = interaction.fields.getTextInputValue('gw_desc') || "Описание отсутствует";
+        const timeMin = parseInt(interaction.fields.getTextInputValue('gw_time')) || 60;
+        const winnersCount = parseInt(interaction.fields.getTextInputValue('gw_winners')) || 1;
+        const endUnix = Math.floor(Date.now() / 1000) + (timeMin * 60);
+
+        const embed = new EmbedBuilder()
+            .setColor(BOT_COLOR)
+            .setTitle(`🎉 Новый розыгрыш: ${prize}`)
+            .setDescription(`**Описание:** ${desc}\n\n**Победителей:** ${winnersCount}\n**Завершится:** <t:${endUnix}:R>`)
+            .setFooter({ text: 'Нажмите кнопку ниже, чтобы участвовать!' });
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('gw_join').setLabel('Участвовать').setStyle(ButtonStyle.Primary)
+        );
+
+        const msg = await interaction.reply({ embeds: [embed], components: [row], fetchReply: true });
+
+        await new Giveaway({
+            msgId: msg.id,
+            prize,
+            desc,
+            endUnix,
+            winners: winnersCount,
+            participants: [],
+            channelId: interaction.channelId
+        }).save();
+    }
+
+    if (interaction.isButton() && interaction.customId === 'gw_join') {
+        const gw = await Giveaway.findOne({ msgId: interaction.message.id });
+        if (!gw || gw.status !== 'active') return interaction.reply({ content: '❌ Розыгрыш уже завершен.', ephemeral: true });
+        if (gw.participants.includes(interaction.user.id)) return interaction.reply({ content: '❌ Вы уже участвуете.', ephemeral: true });
+
+        gw.participants.push(interaction.user.id);
+        await gw.save();
+        return interaction.reply({ content: '✅ Вы успешно вступили в розыгрыш!', ephemeral: true });
+    }
+});
+
+client.login(process.env.DISCORD_TOKEN);
